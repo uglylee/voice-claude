@@ -1,0 +1,22 @@
+# Build artifacts
+dist/
+build/
+*.spec.bak
+__pycache__/
+*.pyc
+
+# Runtime files
+recognition_history.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+*.egg-info/
+*.eggs/
+
+# Conversation logs
+conversation-*.txt
