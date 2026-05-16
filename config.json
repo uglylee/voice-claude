@@ -1,8 +1,4 @@
 {
   "stop_word": "结束输入",
-  "phrase_time_limit": 10,
-  "ambient_duration": 1,
-  "language": "zh",
-  "model": "tiny",
   "minimize_to_tray": true
 }
