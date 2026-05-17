@@ -122,15 +122,16 @@ def dbg(msg):
         pass
 
 def build_model_path():
+    # Priority: external model alongside exe > bundled model
+    external = os.path.join(APP_DIR, "vosk_model")
+    if os.path.isdir(external):
+        return external
     if getattr(sys, 'frozen', False):
         bundled = os.path.join(BUNDLE_DIR, "vosk_model")
         if os.path.isdir(bundled):
             return bundled
         dbg(f"frozen mode, vosk_model not found at {bundled}")
-    project = os.path.join(APP_DIR, "vosk_model")
-    if os.path.isdir(project):
-        return project
-    dbg(f"not frozen, vosk_model not found at {project}")
+    dbg(f"vosk_model not found at {external}")
     return None
 
 class VoskStreamEngine:
@@ -279,7 +280,7 @@ class VoskStreamEngine:
 
                 if has_final:
                     result = json.loads(rec.Result())
-                    text = result.get("text", "").strip()
+                    text = result.get("text", "").replace(" ", "").strip()
                     if text:
                         sw = self.stop_word
                         if sw and sw in text:
