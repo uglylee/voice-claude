@@ -1,77 +1,60 @@
-# 离线流式语音识别输入工具
+# 离线流式语音识别输入
 
-Windows 本地语音识别应用，流式识别，边说边出字，完全离线运行。
+Windows 本地语音识别，边说边出字，完全离线。
 
 ## 特性
 
-- 流式识别 — 边说边出字，不是说完再识别
-- 完全离线 — 基于 Vosk 本地推理，无需联网
+- 流式识别 — 边说边出字
+- 完全离线 — Vosk 本地推理，无需联网
 - 自动输入 — 识别结果直接输入到光标位置
-- 系统托盘 — 最小化到托盘后台运行
-- 自定义停止词 — 配置触发停止的词汇
-- 轻量 — 仅 66MB
+- 系统托盘 — 最小化后台运行
+- 自定义停止词
 
-## 系统要求
+## 下载
 
-- Windows 10 或更高
-- 麦克风
+从 [Releases](../../releases) 下载最新版 `语音识别.exe`（79MB），双击运行。
 
-## 快速开始
+## 提升识别效果
 
-### 下载即用
+内置 small-cn 模型（42MB），如需更高准确度：
 
-从 [Releases](../../releases) 下载 `语音识别.exe`，双击运行。
+1. 下载 [vosk-model-cn-0.22](https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip)（1.4GB）
+2. 解压重命名为 `vosk_model`
+3. 放到 `语音识别.exe` 同级目录
+4. 重启应用自动使用新模型
 
-### 从源码运行
+## 从源码运行
 
 ```bash
-# 1. 安装依赖
 pip install -r requirements.txt
-
-# 2. 下载中文模型
-# 从 https://alphacephei.com/vosk/models 下载 vosk-model-small-cn-0.22.zip
-# 解压到项目目录，重命名为 vosk_model
-
-# 3. 运行
+# 下载中文模型解压为 vosk_model
 python speech_recognition_app.py
 ```
 
-### 打包为 exe
+## 打包
 
 ```bash
 pip install -r requirements.txt pyinstaller
+# 确保 vosk_model 目录在项目根目录
 pyinstaller speech_recognition_app.spec --clean --noconfirm
+# 输出: dist/语音识别.exe
 ```
 
-输出：`dist/语音识别.exe`
+## 使用
 
-## 使用说明
-
-1. 启动应用，点击 **启动引擎**
-2. 对着麦克风说话，文字实时出现在状态栏
-3. 每句结束自动输入到光标位置，开始下一句
-4. 说出停止词（默认 `结束输入`）停止识别
+1. 启动 → 点击「启动引擎」
+2. 说话，实时出字，每句结束自动输入
+3. 说出「结束输入」停止
 
 ## 技术栈
 
 | 组件 | 用途 |
 |------|------|
-| Vosk | 本地流式语音识别引擎 |
+| Vosk | 本地流式语音识别 |
 | PyAudio | 麦克风采集 |
 | tkinter | GUI 界面 |
 | pystray | 系统托盘 |
-| SendInput | Windows Unicode 输入 |
-
-## 项目结构
-
-```
-voice-claude/
-├── speech_recognition_app.py   # 主程序
-├── speech_recognition_app.spec # PyInstaller 打包配置
-├── config.json                 # 用户配置
-├── requirements.txt            # Python 依赖
-└── build.bat                   # 打包脚本
-```
+| SendInput | Unicode 输入 |
 
 ## 许可证
 
