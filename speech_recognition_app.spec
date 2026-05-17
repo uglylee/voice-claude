@@ -8,10 +8,10 @@ a = Analysis(
     ['speech_recognition_app.py'],
     pathex=[project_dir],
     binaries=[
-        ('.venv/Lib/site-packages/vosk/libvosk.dll', '.'),
-        ('.venv/Lib/site-packages/vosk/libgcc_s_seh-1.dll', '.'),
-        ('.venv/Lib/site-packages/vosk/libstdc++-6.dll', '.'),
-        ('.venv/Lib/site-packages/vosk/libwinpthread-1.dll', '.'),
+        ('.venv/Lib/site-packages/vosk/libvosk.dll', 'vosk'),
+        ('.venv/Lib/site-packages/vosk/libgcc_s_seh-1.dll', 'vosk'),
+        ('.venv/Lib/site-packages/vosk/libstdc++-6.dll', 'vosk'),
+        ('.venv/Lib/site-packages/vosk/libwinpthread-1.dll', 'vosk'),
     ],
     datas=[
         ('config.json', '.'),
