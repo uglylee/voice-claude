@@ -142,34 +142,52 @@ class VoskStreamEngine:
         import pyaudio
         import vosk
 
+        self.mq.put(("status", "loading", "查找语音模型...", ""))
+
         model_path = build_model_path()
         if not model_path:
-            self.mq.put(("error", "未找到语音模型，请在程序目录放置 vosk_model 文件夹"))
+            self.mq.put(("error", "未找到语音模型，请将 vosk_model 放到程序目录"))
+            self.running = False
+            self.mq.put(("engine_stopped",))
+            return
+
+        self.mq.put(("status", "loading", f"加载模型 {model_path} ...", ""))
+        try:
+            model = vosk.Model(model_path)
+        except Exception as e:
+            self.mq.put(("error", f"模型加载失败: {e}"))
+            self.running = False
+            self.mq.put(("engine_stopped",))
+            return
+
+        self.mq.put(("status", "loading", "模型就绪，打开麦克风...", ""))
+        rec = vosk.KaldiRecognizer(model, 16000)
+        rec.SetWords(True)
+        rec.SetPartialWords(True)
+
+        try:
+            pa = pyaudio.PyAudio()
+        except Exception as e:
+            self.mq.put(("error", f"音频初始化失败: {e}"))
             self.running = False
             self.mq.put(("engine_stopped",))
             return
 
         try:
-            model = vosk.Model(model_path)
+            stream = pa.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=16000,
+                input=True,
+                frames_per_buffer=4000,
+            )
+            stream.start_stream()
         except Exception as e:
-            self.mq.put(("error", f"加载模型失败: {e}"))
+            pa.terminate()
+            self.mq.put(("error", f"麦克风打开失败: {e}"))
             self.running = False
             self.mq.put(("engine_stopped",))
             return
-
-        rec = vosk.KaldiRecognizer(model, 16000)
-        rec.SetWords(True)
-        rec.SetPartialWords(True)
-
-        pa = pyaudio.PyAudio()
-        stream = pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=16000,
-            input=True,
-            frames_per_buffer=4000,
-        )
-        stream.start_stream()
 
         self.mq.put(("status", "listening",
                      f"流式识别中，停止词: 「{self.stop_word}」", ""))
