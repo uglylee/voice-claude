@@ -7,7 +7,12 @@ project_dir = os.path.dirname(os.path.abspath(SPECPATH))
 a = Analysis(
     ['speech_recognition_app.py'],
     pathex=[project_dir],
-    binaries=[],
+    binaries=[
+        ('.venv/Lib/site-packages/vosk/libvosk.dll', '.'),
+        ('.venv/Lib/site-packages/vosk/libgcc_s_seh-1.dll', '.'),
+        ('.venv/Lib/site-packages/vosk/libstdc++-6.dll', '.'),
+        ('.venv/Lib/site-packages/vosk/libwinpthread-1.dll', '.'),
+    ],
     datas=[
         ('config.json', '.'),
         ('vosk_model', 'vosk_model'),

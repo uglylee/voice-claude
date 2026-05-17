@@ -110,14 +110,27 @@ def create_tray_icon():
 
 # ── Streaming speech engine ────────────────────────────────────────
 
+DEBUG_LOG = os.path.join(APP_DIR, "debug.log")
+
+def dbg(msg):
+    """Write debug message to log file (thread-safe)."""
+    try:
+        t = time.strftime("%H:%M:%S")
+        with open(DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(f"[{t}] {msg}\n")
+    except Exception:
+        pass
+
 def build_model_path():
     if getattr(sys, 'frozen', False):
         bundled = os.path.join(BUNDLE_DIR, "vosk_model")
         if os.path.isdir(bundled):
             return bundled
+        dbg(f"frozen mode, vosk_model not found at {bundled}")
     project = os.path.join(APP_DIR, "vosk_model")
     if os.path.isdir(project):
         return project
+    dbg(f"not frozen, vosk_model not found at {project}")
     return None
 
 class VoskStreamEngine:
@@ -138,36 +151,86 @@ class VoskStreamEngine:
     def stop(self):
         self.running = False
 
+    def _log(self, msg):
+        """Post a log line visible in the GUI."""
+        self.mq.put(("log", msg))
+
     def _run(self):
-        import pyaudio
-        import vosk
+        dbg("=== engine thread started ===")
 
+        # Step 1: import dependencies
+        dbg("importing pyaudio...")
+        self._log("导入 PyAudio...")
+        try:
+            import pyaudio
+            dbg(f"pyaudio imported: {pyaudio.__version__ if hasattr(pyaudio, '__version__') else 'OK'}")
+        except Exception as e:
+            dbg(f"pyaudio import FAILED: {e}")
+            self.mq.put(("error", f"导入 PyAudio 失败: {e}"))
+            self.running = False
+            self.mq.put(("engine_stopped",))
+            return
+
+        dbg("importing vosk...")
+        self._log("导入 Vosk...")
+        try:
+            import vosk
+            dbg(f"vosk imported OK")
+        except Exception as e:
+            dbg(f"vosk import FAILED: {e}")
+            self.mq.put(("error", f"导入 Vosk 失败: {e}"))
+            self.running = False
+            self.mq.put(("engine_stopped",))
+            return
+
+        # Step 2: find model
+        self._log("查找语音模型...")
         self.mq.put(("status", "loading", "查找语音模型...", ""))
-
         model_path = build_model_path()
+        dbg(f"model_path = {model_path}")
+        dbg(f"frozen={getattr(sys, 'frozen', False)} APP_DIR={APP_DIR} BUNDLE_DIR={BUNDLE_DIR}")
+
+        if model_path:
+            dbg(f"model_path contents: {os.listdir(model_path)}")
         if not model_path:
+            self._log("ERROR: 未找到 vosk_model")
             self.mq.put(("error", "未找到语音模型，请将 vosk_model 放到程序目录"))
             self.running = False
             self.mq.put(("engine_stopped",))
             return
 
-        self.mq.put(("status", "loading", f"加载模型 {model_path} ...", ""))
+        # Step 3: load model
+        self._log(f"加载模型: {model_path}")
+        self.mq.put(("status", "loading", "加载模型中...", ""))
+        dbg(f"calling vosk.Model({model_path})...")
         try:
             model = vosk.Model(model_path)
+            dbg("vosk.Model returned OK")
         except Exception as e:
+            dbg(f"vosk.Model FAILED: {e}")
+            import traceback
+            dbg(traceback.format_exc())
             self.mq.put(("error", f"模型加载失败: {e}"))
             self.running = False
             self.mq.put(("engine_stopped",))
             return
 
-        self.mq.put(("status", "loading", "模型就绪，打开麦克风...", ""))
+        # Step 4: create recognizer
+        self._log("创建识别器...")
         rec = vosk.KaldiRecognizer(model, 16000)
         rec.SetWords(True)
         rec.SetPartialWords(True)
+        dbg("KaldiRecognizer created")
 
+        # Step 5: open microphone
+        self._log("打开麦克风...")
+        self.mq.put(("status", "loading", "打开麦克风...", ""))
         try:
             pa = pyaudio.PyAudio()
+            dbg(f"PyAudio initialized, device count: {pa.get_device_count()}")
+            self._log(f"音频设备数: {pa.get_device_count()}")
         except Exception as e:
+            dbg(f"PyAudio init FAILED: {e}")
             self.mq.put(("error", f"音频初始化失败: {e}"))
             self.running = False
             self.mq.put(("engine_stopped",))
@@ -182,16 +245,22 @@ class VoskStreamEngine:
                 frames_per_buffer=4000,
             )
             stream.start_stream()
+            dbg("microphone stream opened OK")
+            self._log("麦克风就绪")
         except Exception as e:
+            dbg(f"mic open FAILED: {e}")
             pa.terminate()
             self.mq.put(("error", f"麦克风打开失败: {e}"))
             self.running = False
             self.mq.put(("engine_stopped",))
             return
 
+        # Step 6: ready
+        dbg("engine ready, entering listen loop")
         self.mq.put(("status", "listening",
                      f"流式识别中，停止词: 「{self.stop_word}」", ""))
         self.mq.put(("engine_ready",))
+        self._log("引擎就绪，开始监听")
 
         accumulated = ""
 
@@ -199,14 +268,14 @@ class VoskStreamEngine:
             while self.running:
                 try:
                     data = stream.read(4000, exception_on_overflow=False)
-                except Exception:
+                except Exception as ex:
+                    dbg(f"stream.read error: {ex}")
                     continue
 
-                chunk_len = len(data)
-                if chunk_len == 0:
+                if len(data) == 0:
                     continue
 
-                has_final = rec.AcceptWaveform(data) if chunk_len > 0 else False
+                has_final = rec.AcceptWaveform(data)
 
                 if has_final:
                     result = json.loads(rec.Result())
@@ -235,15 +304,21 @@ class VoskStreamEngine:
                         self.mq.put(("partial", accumulated + partial_text))
 
         except Exception as e:
+            dbg(f"listen loop error: {e}")
+            import traceback
+            dbg(traceback.format_exc())
             self.mq.put(("error", f"引擎异常: {e}"))
         finally:
+            dbg("cleaning up audio...")
             try:
                 stream.stop_stream()
                 stream.close()
                 pa.terminate()
-            except Exception:
-                pass
+                dbg("audio cleanup OK")
+            except Exception as ex:
+                dbg(f"audio cleanup error: {ex}")
             self.mq.put(("engine_stopped",))
+            dbg("=== engine thread ended ===")
 
 # ── GUI Application ────────────────────────────────────────────────
 
@@ -439,6 +514,9 @@ class VoiceInputApp:
 
                 if msg_type == "status":
                     self.update_status(msg[1], msg[2], msg[3] if len(msg) > 3 else "")
+
+                elif msg_type == "log":
+                    self.log(f"🔧 {msg[1]}")
 
                 elif msg_type == "engine_ready":
                     self.update_status("listening",
